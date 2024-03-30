@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"github.com/kljensen/snowball"
+	"os"
 	"strings"
 )
 
@@ -12,14 +14,7 @@ func main() {
 	flag.Parse()
 
 	var words []string
-
-	if *sFlag != "" {
-		*sFlag = strings.ReplaceAll(*sFlag, "i'll", "i will")
-		words = strings.Fields(*sFlag)
-	} else {
-		// Если флаг -s не использовался, парсим аргументы как список слов
-		words = flag.Args()
-	}
+	words = strings.Fields(*sFlag)
 
 	result := normalization(words)
 	fmt.Println(strings.Join(result, " "))
@@ -27,11 +22,21 @@ func main() {
 
 func normalization(words []string) []string {
 
-	ignoredWords := map[string]bool{
-		"of": true, "a": true, "the": true, "will": true, "i": true, "you": true, "as": true, "are": true, "me": true,
-		// Можно добавить другие слова, которые нужно игнорировать
+	//Файл со стоп словами(english), которые необходимо игнорировать
+	file, err := os.Open("stop_words_english.txt")
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+
+	//Мапа для стоп слов
+	var ignoredWords = make(map[string]bool)
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		ignoredWords[scanner.Text()] = true
 	}
 
+	//Мапа для повторяющихся слов
 	repeated := make(map[string]struct{})
 
 	var result []string
