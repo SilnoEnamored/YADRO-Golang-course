@@ -2,4 +2,4 @@ build:
 	go build -o bin/myapp.exe myapp/main.go
 
 clean:
-	rm -f myapp
+	del /F /Q bin\myapp.exe

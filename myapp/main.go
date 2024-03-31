@@ -9,32 +9,46 @@ import (
 	"strings"
 )
 
+var ignoredWords = make(map[string]bool)
+
 func main() {
 	sFlag := flag.String("s", "", "Input string to be normalized")
 	flag.Parse()
 
+	loadStopWords("stop_words_english.txt")
+
 	var words []string
 	words = strings.Fields(*sFlag)
 
-	result := normalization(words)
+	result := normalization(words, ignoredWords)
 	fmt.Println(strings.Join(result, " "))
 }
 
-func normalization(words []string) []string {
+// Функция удаляет все в строке, что не является английской буквой
+func deleteUnnecessary(s string) string {
+	var result strings.Builder
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') {
+			result.WriteRune(r) //Можно использовать WriteByte и будет даже эффективнее по памяти и скороскти, если мы уверенны, что строка будет состоять только из ASCII символов
+		}
+	}
+	return result.String()
+}
 
-	//Файл со стоп словами(english), которые необходимо игнорировать
-	file, err := os.Open("stop_words_english.txt")
+func loadStopWords(filePath string) {
+	file, err := os.Open(filePath)
 	if err != nil {
 		panic(err)
 	}
 	defer file.Close()
 
-	//Мапа для стоп слов
-	var ignoredWords = make(map[string]bool)
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		ignoredWords[scanner.Text()] = true
 	}
+}
+
+func normalization(words []string, ignoredWords map[string]bool) []string {
 
 	//Мапа для повторяющихся слов
 	repeated := make(map[string]struct{})
@@ -43,7 +57,7 @@ func normalization(words []string) []string {
 	for _, word := range words {
 		word = strings.ToLower(word)
 		if !ignoredWords[word] {
-			stemmed, err := snowball.Stem(word, "english", true)
+			stemmed, err := snowball.Stem(deleteUnnecessary(word), "english", true)
 			if err != nil {
 				fmt.Println("Error stemming word:", err)
 				continue
