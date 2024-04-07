@@ -1,28 +1,11 @@
-package main
+package words
 
 import (
 	"bufio"
-	"flag"
-	"fmt"
 	"github.com/kljensen/snowball"
 	"os"
 	"strings"
 )
-
-var ignoredWords = make(map[string]bool)
-
-func main() {
-	sFlag := flag.String("s", "", "Input string to be normalized")
-	flag.Parse()
-
-	loadStopWords("stop_words_english.txt")
-
-	var words []string
-	words = strings.Fields(*sFlag)
-
-	result := normalization(words, ignoredWords)
-	fmt.Println(strings.Join(result, " "))
-}
 
 // Функция удаляет все в строке, что не является английской буквой
 func deleteUnnecessary(s string) string {
@@ -35,38 +18,46 @@ func deleteUnnecessary(s string) string {
 	return result.String()
 }
 
-func loadStopWords(filePath string) {
+func loadStopWords(filePath string) (map[string]bool, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	defer file.Close()
 
+	ignoredWords := make(map[string]bool)
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		ignoredWords[scanner.Text()] = true
 	}
+
+	return ignoredWords, nil
 }
 
-func normalization(words []string, ignoredWords map[string]bool) []string {
+// Normalization обрабатывает список слов и возвращает нормализованный список
+func Normalization(words []string) ([]string, error) {
+	ignoredWords, err := loadStopWords("./pkg/words/stop_words_english.txt")
+	if err != nil {
+		return nil, err
+	}
 
-	//Мапа для повторяющихся слов
 	repeated := make(map[string]struct{})
-
 	var result []string
 	for _, word := range words {
 		word = strings.ToLower(word)
 		if !ignoredWords[word] {
 			stemmed, err := snowball.Stem(deleteUnnecessary(word), "english", true)
 			if err != nil {
-				fmt.Println("Error stemming word:", err)
+				return nil, err
+			}
+			if stemmed == "" || stemmed == "alt" {
 				continue
 			}
-			if _, ok := repeated[stemmed]; !ok {
+			if _, exists := repeated[stemmed]; !exists {
 				result = append(result, stemmed)
 				repeated[stemmed] = struct{}{}
 			}
 		}
 	}
-	return result
+	return result, nil
 }
