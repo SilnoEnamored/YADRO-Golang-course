@@ -2,8 +2,6 @@ package xkcd
 
 import (
 	"encoding/json"
-	"fmt"
-	"github.com/schollz/progressbar/v3"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -16,68 +14,76 @@ type Comics struct {
 	AltText    string `json:"alt"`
 }
 
-const latestComicEndpoint = "info.0.json"
+// Клиент для работы с Api
+type ComicClient struct {
+	BaseURL   string
+	Endpoints map[string]string
+}
 
-// Загружает данные комикса по URL
-func fetchComic(comicURL string) (Comics, error) {
-	// Запрос
-	resp, err := http.Get(comicURL)
+func NewComicClient(baseURL string) *ComicClient {
+	endpoints := map[string]string{
+		"FetchComic": "info.0.json",
+	}
+	return &ComicClient{
+		BaseURL:   baseURL,
+		Endpoints: endpoints,
+	}
+}
+
+// находит ID последнего доступного комикса, сложность O(logN)
+func (client *ComicClient) FetchLatestComicID() int {
+	id := 1
+	for step := 10; ; step *= 10 {
+		if client.FetchComic(id).ID == 0 {
+			break
+		}
+		id *= 10
+	}
+
+	low, high := id/10, id
+	for low < high {
+		mid := low + (high-low)/2
+		if client.FetchComic(mid).ID == 0 {
+			high = mid
+		} else {
+			low = mid + 1
+		}
+	}
+
+	return low - 1
+}
+
+// возвращает комикс по его ID
+func (client *ComicClient) FetchComic(comicID int) Comics {
+	url := client.buildComicURL(comicID)
+	return client.fetchComicData(url)
+}
+
+// извлекает данные о комиксе по URL
+func (client *ComicClient) fetchComicData(endpoint string) Comics {
+	response, err := http.Get(endpoint)
 	if err != nil {
-		return Comics{}, err
+		panic(err)
 	}
-	defer resp.Body.Close()
+	defer response.Body.Close()
 
-	// Проверка на корректность ответа
-	if resp.StatusCode != http.StatusOK {
-		return Comics{}, fmt.Errorf("failed to fetch comic: HTTP %d %s", resp.StatusCode, http.StatusText(resp.StatusCode))
-	}
-
-	// Читаем Json из запроса и преобразуем в структуру comic
 	var comic Comics
-	if err := json.NewDecoder(resp.Body).Decode(&comic); err != nil {
-		return Comics{}, err
+	if response.StatusCode == http.StatusOK {
+		err := json.NewDecoder(response.Body).Decode(&comic)
+		if err != nil {
+			panic(err)
+		}
 	}
 
-	return comic, nil
+	return comic
 }
 
-// Данные последнего комикса для определения общего количества
-func fetchLatestComic(baseURL string) (Comics, error) {
-	urlLastComic, err := url.JoinPath(baseURL, latestComicEndpoint)
+// создает URL для получения комикса по ID
+func (client *ComicClient) buildComicURL(comicID int) string {
+	comicURL, err := url.JoinPath(client.BaseURL, strconv.Itoa(comicID), client.Endpoints["FetchComic"])
 	if err != nil {
-		return Comics{}, err
+		panic(err)
 	}
 
-	return fetchComic(urlLastComic)
-}
-
-// Загружает данные всех комиксов XKCD
-func FetchAllComics(baseURL string) ([]Comics, error) {
-	latestComic, err := fetchLatestComic(baseURL)
-	if err != nil {
-		return nil, err
-	}
-	totalComics := latestComic.ID // Используем ID последнего комикса как общее количество комиксов
-
-	// Прогрессбар
-	bar := progressbar.Default(int64(totalComics))
-
-	comicsSlice := make([]Comics, 0, totalComics)
-
-	for i := 1; i <= totalComics; i++ {
-		bar.Add(1)
-		comicURL, err := url.JoinPath(baseURL, strconv.Itoa(i), latestComicEndpoint)
-		if err != nil {
-			continue // Пропускаем комиксы с ошибками в URL
-		}
-
-		comic, err := fetchComic(comicURL)
-		if err != nil {
-			continue // Пропускаем комиксы с ошибками при загрузке
-		}
-
-		comicsSlice = append(comicsSlice, comic)
-	}
-
-	return comicsSlice, nil
+	return comicURL
 }
