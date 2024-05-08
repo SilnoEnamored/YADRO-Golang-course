@@ -41,23 +41,27 @@ func Normalization(words []string) ([]string, error) {
 		return nil, err
 	}
 
-	repeated := make(map[string]struct{})
+	repeated := make(map[string]bool)
 	var result []string
+
 	for _, word := range words {
 		word = strings.ToLower(word)
-		if !ignoredWords[word] {
-			stemmed, err := snowball.Stem(deleteUnnecessary(word), "english", true)
-			if err != nil {
-				return nil, err
-			}
-			if stemmed == "" || stemmed == "alt" {
-				continue
-			}
-			if _, exists := repeated[stemmed]; !exists {
-				result = append(result, stemmed)
-				repeated[stemmed] = struct{}{}
-			}
+		if _, exists := ignoredWords[word]; exists {
+			continue
 		}
+
+		stemmed, err := snowball.Stem(deleteUnnecessary(word), "english", true)
+		if err != nil {
+			continue
+		}
+
+		if stemmed == "" || stemmed == "alt" || ignoredWords[stemmed] || repeated[stemmed] {
+			continue
+		}
+
+		result = append(result, stemmed)
+		repeated[stemmed] = true
 	}
+
 	return result, nil
 }

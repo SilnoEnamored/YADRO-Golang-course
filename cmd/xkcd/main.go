@@ -2,49 +2,30 @@ package main
 
 import (
 	"flag"
-	"fmt"
-	"gopkg.in/yaml.v2"
-	"io/ioutil"
 	"log"
+	"myapp/internal/config"
 	"myapp/internal/interrupt"
+	"myapp/internal/search"
+	"myapp/pkg/index"
 )
 
 // структура для хранения конфигурации
-type Config struct {
-	SourceURL string `yaml:"source_url"`
-	DbFile    string `yaml:"db_file"`
-	Parallel  int    `yaml:"parallel"`
-}
 
-// Загружает конфигурацию из YAML файла
-func loadConfig(path string) (Config, error) {
-	var config Config
+func ParseFlags() (string, string, bool) {
+	pathConfig := flag.String("c", "config.yaml", "path to the configuration file")
+	searchLine := flag.String("s", "", "line for search comics by database.json")
+	isIndexSearch := flag.Bool("i", false, "enables index search")
+	flag.Parse()
 
-	bytes, err := ioutil.ReadFile(path)
-	if err != nil {
-		return Config{}, fmt.Errorf("unable to load config file: %w", err)
-	}
-
-	err = yaml.Unmarshal(bytes, &config)
-	if err != nil {
-		return Config{}, fmt.Errorf("yaml decode error: %w", err)
-	}
-
-	// Проверяем, что parallel больше 0
-	if config.Parallel <= 0 {
-		config.Parallel = 1 // устанавливаем по умолчанию в 1, если значение не задано или отрицательно
-	}
-
-	return config, nil
+	return *pathConfig, *searchLine, *isIndexSearch
 }
 
 func main() {
 	// Единственный флаг
-	configPath := flag.String("c", "config.yaml", "Path to the configuration file")
-	flag.Parse()
+	pathConfig, searchLine, isIndexSearch := ParseFlags()
 
 	// Работа с конфигом
-	config, err := loadConfig(*configPath)
+	config, err := config.LoadConfig(pathConfig)
 	if err != nil {
 		log.Fatalf("Error loading config: %v", err)
 	}
@@ -55,5 +36,13 @@ func main() {
 		log.Fatal("error create database: ")
 	}
 	defer db.Close()
+
+	index, err := index.CreateIndex(config.IndexFile, db)
+	if err != nil {
+		log.Fatal("error create index: " + err.Error())
+	}
+
+	// выполняем поиск
+	search.Search(searchLine, db, index, isIndexSearch, true)
 
 }
